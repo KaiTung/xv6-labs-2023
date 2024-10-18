@@ -31,6 +31,7 @@ const char *syscall_names[] = {
     [SYS_mkdir]   "mkdir",
     [SYS_close]   "close",
     [SYS_trace]   "trace",
+    [SYS_sysinfo]   "sysinfo",
     // 继续添加其他系统调用名称...
 };
 
@@ -131,6 +132,7 @@ extern uint64 sys_link(void);
 extern uint64 sys_mkdir(void);
 extern uint64 sys_close(void);
 extern uint64 sys_trace(void);
+extern uint64 sys_sysinfo(void);
 
 
 // An array mapping syscall numbers from syscall.h
@@ -158,16 +160,18 @@ static uint64 (*syscalls[])(void) = {
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
 [SYS_trace]   sys_trace,
+[SYS_sysinfo] sys_sysinfo,
 };
 
+
 void
-syscall(void)
+syscall(void) //內核會通過 syscall() 函數識別系統呼叫的編號（由 trapframe->a7 設置）。
 {
   int num;
   struct proc *p = myproc();
 
   num = p->trapframe->a7;
-  // num = * (int *) 0;
+
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
     // Use num to lookup the system call function for num, call it,
     // and store its return value in p->trapframe->a0

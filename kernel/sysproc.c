@@ -5,6 +5,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "sysinfo.h"
 
 uint64
 sys_exit(void)
@@ -108,4 +109,28 @@ sys_trace(void)
   p->trace_mask = mask;
 
   return 0;  // 成功
+}
+
+uint64
+sys_sysinfo(void){
+  struct sysinfo info;
+  uint64 addr;
+
+  // 獲取用戶態傳入的參數（sysinfo 結構體的指針）
+  argaddr(0, &addr);
+  if(addr < 0){
+    return -1;
+  }
+
+  info.freemem = get_freemem();
+  info.nproc = get_nproc();
+
+  // 將 sysinfo 結構體複製回用戶空間
+  if (copyout(myproc()->pagetable, addr, (char *)&info, sizeof(info)) < 0) {
+      return -1;
+  }
+
+  return 0;
+
+
 }
