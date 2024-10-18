@@ -91,3 +91,21 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_trace(void)
+{
+  int mask;
+  
+  argint(0, &mask);  // 調用 argint 並將值存入 mask
+  // 假設這裡可以處理 mask 的邊界情況 
+  if (mask < 0) {
+      return -1;  // 錯誤處理
+  }
+
+  // 記錄 mask 到當前進程的 trace_mask 中
+  struct proc *p = myproc();
+  p->trace_mask = mask;
+
+  return 0;  // 成功
+}

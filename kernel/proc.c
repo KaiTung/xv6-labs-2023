@@ -299,6 +299,9 @@ fork(void)
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 
+  // 複製父進程的 trace_mask 到新進程
+  np->trace_mask = p->trace_mask;  // 複製 trace_mask
+
   // Cause fork to return 0 in the child.
   np->trapframe->a0 = 0;
 
