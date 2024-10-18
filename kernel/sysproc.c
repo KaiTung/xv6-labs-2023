@@ -127,7 +127,7 @@ sys_sysinfo(void){
 
   // 將 sysinfo 結構體複製回用戶空間
   if (copyout(myproc()->pagetable, addr, (char *)&info, sizeof(info)) < 0) {
-      return -1;
+    return -1;
   }
 
   return 0;
