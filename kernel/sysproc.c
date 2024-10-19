@@ -93,12 +93,13 @@ sys_uptime(void)
   return xticks;
 }
 
+//在 xv6 這樣的操作系統中，當用戶程序調用系統調用（如 trace()）時，參數會被放到特定的寄存器中或者保存到內核棧裡。內核會根據系統調用的編號來查找對應的處理函數，並把這些參數取出來。
 uint64
 sys_trace(void)
 {
   int mask;
   
-  argint(0, &mask);  // 調用 argint 並將值存入 mask
+  argint(0, &mask);  //通過調用 argint(0, &mask) 來獲取系統調用的參數。argint() 函數會從用戶態傳遞過來的參數列表中提取第 0 個參數（即第一個參數），並將其值存入 mask 變量中。
   // 假設這裡可以處理 mask 的邊界情況 
   if (mask < 0) {
       return -1;  // 錯誤處理
@@ -116,7 +117,7 @@ sys_sysinfo(void){
   struct sysinfo info;
   uint64 addr;
 
-  // 獲取用戶態傳入的參數（sysinfo 結構體的指針）
+  // 從用戶空間系統調用的參數列表中獲取第一個參數（索引 0），並將其解釋為一個指針（地址），然後存入 addr 變量中。
   argaddr(0, &addr);
   if(addr < 0){
     return -1;
@@ -131,6 +132,4 @@ sys_sysinfo(void){
   }
 
   return 0;
-
-
 }
