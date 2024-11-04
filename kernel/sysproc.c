@@ -74,7 +74,41 @@ sys_sleep(void)
 int
 sys_pgaccess(void)
 {
+  //int pgaccess(void *base, int len, void *mask);
+  //    pgaccess(buf, 32, &abits)
+
   // lab pgtbl: your code here.
+  struct proc *p = myproc();
+  unsigned int abits=0;
+
+  //以pointer的形式，取得使用者輸入 buf 
+  uint64 addr;
+  argaddr(0, &addr);
+
+  //以int的形式，取得使用者輸入 32
+  int num;
+  argint(1,&num);
+
+  //以pointer的形式，取得使用者輸入 &abit
+  uint64 dest;
+  argaddr(2, &dest);
+
+  for(int i=0; i<num ;i++){
+    uint64 addr_list = addr + i * PGSIZE;
+    pte_t *pte;
+    pte = walk(p->pagetable, addr_list, 0);
+
+    if(*pte & PTE_A)
+    {
+      abits=abits|(1<<i);
+      *pte=(*pte) & (~PTE_A);
+    }
+
+  }
+
+  if (copyout(p->pagetable, dest, (char *)&abits, sizeof(abits)) < 0)
+      return -1;
+
   return 0;
 }
 #endif
