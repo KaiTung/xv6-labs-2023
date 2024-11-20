@@ -1,0 +1,29 @@
+1.Which registers contain arguments to functions? For example, which register holds 13 in main's call to printf?
+    a2
+
+2.Where is the call to function f in the assembly code for main? Where is the call to g? (Hint: the compiler may inline functions.)
+    1. Where is the call to f?
+    In the assembly code for main, there’s no explicit jal or jalr to f. However, you see this instruction:
+
+    26:	45b1                	li	a1,12
+
+    This corresponds to the computation of f(8) + 1.
+
+    f(8) is inlined: The computation g(x) (which is x + 3) and the addition of 1 are performed directly in main. Specifically:
+    g(8) computes 8 + 3 = 11.
+    Adding 1 to this result gives 12.
+    Since the compiler has inlined f and g, there’s no need to explicitly call these functions.
+
+    Similarly, there is no explicit call to g. Its behavior (x + 3) is included directly in the computation within f and further inlined in main
+
+3.At what address is the function printf located?
+    30:	00000097          	auipc	ra,0x0
+    34:	600080e7          	jalr	1536(ra) # 630 <printf>
+
+    當前pc = 0x30 再加上 1536 = 0x600 因此 ra的值為pc加上偏移量 = 0x630 
+
+4.What value is in the register ra just after the jalr to printf in main?
+    The jalr instruction is at address 0x34. After it executes, the return address will be the address of the next instruction: 
+
+    ra = 0x34 + 4 = 0x38
+
