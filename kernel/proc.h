@@ -104,4 +104,11 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  // 新增這些欄位以支持 alarm 功能
+  int in_alarm;             //判斷是否正在alarm
+  int alarm_threshold;         
+  uint64 alarm_handler;      
+  int alarm_count;
+  struct trapframe *alarm_trapframe;      // 用於暫存原始的 trapframe
 };
