@@ -49,7 +49,10 @@ usertrap(void)
   
   // save user program counter.
   p->trapframe->epc = r_sepc();
-  
+
+  //exception addr
+  uint64 addr = r_stval();
+
   if(r_scause() == 8){
     // system call
 
@@ -67,11 +70,23 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  }else if(r_scause() == 15 && iscowpage(p->pagetable, PGROUNDDOWN(addr))){
+      // printf("Page Fault: addr=%p, cause=%d\n", r_stval(), r_scause());
+      // ** Get virtual address causing page fault and corresponding pa & pte
+      
+      // ** If virtual address is over maximum va size or within guard page, kill the process
+      if (addr >= MAXVA || (addr < p->trapframe->sp && addr >= (p->trapframe->sp - PGSIZE))){
+        p->killed = 1;
+      }else if (cowalloc(p->pagetable, PGROUNDDOWN(addr)) < 0){
+        p->killed = 1;
+      }
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     setkilled(p);
   }
+
+
 
   if(killed(p))
     exit(-1);
@@ -153,6 +168,9 @@ kerneltrap()
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING)
     yield();
+
+
+
 
   // the yield() may have caused some traps to occur,
   // so restore trap registers for use by kernelvec.S's sepc instruction.
