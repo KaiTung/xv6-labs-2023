@@ -95,26 +95,74 @@ e1000_init(uint32 *xregs)
 int
 e1000_transmit(struct mbuf *m)
 {
-  //
-  // Your code here.
-  //
   // the mbuf contains an ethernet frame; program it into
   // the TX descriptor ring so that the e1000 sends it. Stash
   // a pointer so that it can be freed after sending.
-  //
-  
+
+  //First ask the E1000 for the TX ring index at which it's expecting the next packet, by reading the E1000_TDT control register.
+
+  acquire(&e1000_lock);
+
+  //1. 取得下一個需要發送的數據包
+  uint32 idx = regs[E1000_TDT]; // transmit tail，表明第一个空闲的环形描述符
+  struct tx_desc* desc = &tx_ring[idx];
+
+  //2. 檢查數據包是否完成轉發，否則return
+  if((desc->status & E1000_TXD_STAT_DD) == 0){
+    release(&e1000_lock);
+    return -1;
+  }
+
+  //3. 釋放舊的資料 
+  if(tx_mbufs[idx]){
+    mbuffree(tx_mbufs[idx]);
+  }
+
+  //4. 設置描述符與緩存區字段
+  desc->addr = (uint64)m->head;
+  desc->length = m->len;
+  desc->cmd = E1000_TXD_CMD_RS | E1000_TXD_CMD_EOP;
+  tx_mbufs[idx] = m; // 方便之後清理
+
+  //5. 更新 tail 位置
+  regs[E1000_TDT] = (idx + 1) % TX_RING_SIZE;
+  release(&e1000_lock);
+
   return 0;
 }
 
 static void
 e1000_recv(void)
 {
-  //
-  // Your code here.
-  //
   // Check for packets that have arrived from the e1000
   // Create and deliver an mbuf for each packet (using net_rx()).
-  //
+  
+  //1. 取得下一個需要接收的數據包
+  uint32 idx = (regs[E1000_RDT] + 1) % RX_RING_SIZE;// head 到 tail 是一个空的缓冲区
+  struct rx_desc *desc = &rx_ring[idx];
+
+  while(desc->status & E1000_RXD_STAT_DD){
+
+    //2. 更新緩衝區訊息，遞交數據包
+    rx_mbufs[idx]->len = desc->length;
+
+    net_rx(rx_mbufs[idx]);
+
+    //3. 分配新的緩衝區，更新描述符號
+    rx_mbufs[idx] = mbufalloc(0);
+    if (!rx_mbufs[idx])
+      panic("mbuf alloc failed");
+
+    desc->addr = (uint64)rx_mbufs[idx]->head ;
+    desc->status = 0;
+
+    regs[E1000_RDT] = idx;
+
+    idx = (regs[E1000_RDT] + 1) % RX_RING_SIZE;
+    desc = &rx_ring[idx];
+
+  }
+  
 }
 
 void
