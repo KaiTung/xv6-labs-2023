@@ -21,12 +21,16 @@ struct run {
 struct {
   struct spinlock lock;
   struct run *freelist;
-} kmem;
+  char lock_name[7]; 
+} kmem[NCPU];
 
 void
 kinit()
 {
-  initlock(&kmem.lock, "kmem");
+  for(int i = 0; i < NCPU; i++){
+    snprintf(kmem[i].lock_name, sizeof(kmem[i].lock_name), "kmem_%d", i);
+    initlock(&kmem[i].lock, kmem[i].lock_name);
+  }
   freerange(end, (void*)PHYSTOP);
 }
 
@@ -55,11 +59,15 @@ kfree(void *pa)
   memset(pa, 1, PGSIZE);
 
   r = (struct run*)pa;
+  push_off();
+  int id = cpuid();
 
-  acquire(&kmem.lock);
-  r->next = kmem.freelist;
-  kmem.freelist = r;
-  release(&kmem.lock);
+  acquire(&kmem[id].lock);
+  r->next = kmem[id].freelist;
+  kmem[id].freelist = r;
+  release(&kmem[id].lock);
+
+  pop_off();
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -70,12 +78,58 @@ kalloc(void)
 {
   struct run *r;
 
-  acquire(&kmem.lock);
-  r = kmem.freelist;
-  if(r)
-    kmem.freelist = r->next;
-  release(&kmem.lock);
+  push_off();
+  int id = cpuid();
 
+  acquire(&kmem[id].lock);
+  r = kmem[id].freelist;
+  if(r){
+    kmem[id].freelist = r->next;
+  }else{ //alloc fail, steal page from others cpu core
+    int success = 0;
+    for(int i = 0;i < NCPU; i++){
+      if (i == id){
+        continue;
+      }
+      // acquire(&kmem[i].lock);
+      struct run *p;
+      p = kmem[i].freelist;
+      if(p){
+        //steal half of memory
+
+        //1. 用快慢指針，找到中間
+        struct run* fast = p;
+        struct run* prev = 0;
+        while(fast && fast->next){ 
+          prev = p;
+          p = p->next;
+          fast = fast->next->next;
+        }
+
+        //2. freelist頭 ~ p 之間的 mem 給 kmem[id].freelist 
+        kmem[id].freelist = kmem[i].freelist; //將地址指到 kmem[i].freelist
+        if (p == kmem[i].freelist) {
+          // only have one page
+          kmem[i].freelist = 0;
+        }
+        else {
+          kmem[i].freelist = p; //頭 ~ slow 之間的 mem 給了 kmem[id].freelist，更改起始位置到p
+          prev->next = 0; //將 prev->next 指向 p ，將連接中斷
+        }
+
+        // release(&kmem[i].lock);
+        success++;
+      }
+      //3. 因為從別的cpu得到了新的mem，取得一頁page
+      if(success){
+        r = kmem[id].freelist;
+        kmem[id].freelist = r->next;
+        break;
+      }
+    }
+  }
+  release(&kmem[id].lock);
+  pop_off();
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
