@@ -396,7 +396,7 @@ bmap(struct inode *ip, uint bn)
   }
   bn -= NDIRECT;
 
-  if(bn < NINDIRECT){
+  if(bn < NINDIRECT){ // NINDIRECT = 256
     // Load indirect block, allocating if necessary.
     if((addr = ip->addrs[NDIRECT]) == 0){
       addr = balloc(ip->dev);
@@ -410,6 +410,46 @@ bmap(struct inode *ip, uint bn)
       addr = balloc(ip->dev);
       if(addr){
         a[bn] = addr;
+        log_write(bp);
+      }
+    }
+    brelse(bp);
+    return addr;
+  }
+
+  bn -= NINDIRECT;
+  // the 13th should be doubly-indirect block. Holds 256*256-1 blocks. total block should be 11 + 256 + 256*256-1 = 65803.
+  if(bn < (NINDIRECT * NINDIRECT)){
+    int idx = bn / NINDIRECT;
+    int off = bn % NINDIRECT;
+
+    // Load double-indirect block, allocating if necessary.
+    if((addr = ip->addrs[NDIRECT + 1]) == 0){
+      addr = balloc(ip->dev);
+      if(addr == 0)
+        return 0;
+      ip->addrs[NDIRECT + 1] = addr;
+    }
+
+    //第一次bread得到存放地址的buf的addr
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
+    if((addr = a[idx]) == 0){
+      addr = balloc(ip->dev);
+      if(addr){
+        a[idx] = addr;
+        log_write(bp);
+      }
+    }
+    brelse(bp);
+
+    //第二次bread才把真的256的地址讀取出來
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
+    if((addr = a[off]) == 0){
+      addr = balloc(ip->dev);
+      if(addr){
+        a[off] = addr;
         log_write(bp);
       }
     }
@@ -448,6 +488,29 @@ itrunc(struct inode *ip)
     ip->addrs[NDIRECT] = 0;
   }
 
+  // release the doubly-indirect block.
+  if(ip->addrs[NDIRECT+1]){
+    struct buf *bpd;
+    uint* b;
+
+    bp = bread(ip->dev, ip->addrs[NDIRECT+1]);
+    a = (uint*)bp->data;
+    for(j = 0; j < NINDIRECT; j++){
+      if(a[j]){
+        // a[0~255] 存放 256個 buf， 遍歷釋放
+        bpd = bread(ip->dev, a[j]);
+        b = (uint*)bpd->data;
+        for(int k = 0; k < NINDIRECT; k++){
+          if(b[k]) bfree(ip->dev, b[k]);
+        }
+        brelse(bpd);
+        bfree(ip->dev, a[j]);
+      }
+    }
+    brelse(bp);
+    bfree(ip->dev, ip->addrs[NDIRECT]);
+    ip->addrs[NDIRECT+1] = 0;
+  }
   ip->size = 0;
   iupdate(ip);
 }

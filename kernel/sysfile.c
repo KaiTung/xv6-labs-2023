@@ -341,6 +341,30 @@ sys_open(void)
     return -1;
   }
 
+  //lab fs
+  if(ip->type == T_SYMLINK){
+    if(!(omode & O_NOFOLLOW)){
+      char target[MAXPATH];
+      int cycle = 0;
+      while(ip->type == T_SYMLINK){
+        if(cycle == 10){
+          iunlockput(ip);
+          end_op();
+          return -1; // max cycle
+        }
+        cycle++;
+        readi(ip, 0, (uint64)target, 0, MAXPATH);
+        iunlockput(ip);
+        if((ip = namei(target)) == 0){
+          end_op();
+          return -1; // target not exist
+        }
+        ilock(ip);
+      }
+    }
+  }
+
+
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
     if(f)
       fileclose(f);
@@ -501,5 +525,33 @@ sys_pipe(void)
     fileclose(wf);
     return -1;
   }
+  return 0;
+}
+
+uint64
+sys_symlink(void){ //symlink(target, path)
+  //創建一個inode, 設置類行為 T_SYMLINK, 然後向這個inode寫入目標文件路徑
+  //function call會傳入兩個string target 以及 path
+  char target[MAXPATH]; 
+  char path[MAXPATH];
+
+  if(argstr(0, target, MAXPATH) < 0 || argstr(1, path, MAXPATH) < 0){
+    return -1;
+  }
+
+  struct inode *ip;
+  begin_op();
+  if((ip = create(path, T_SYMLINK, 0, 0)) == 0){
+    end_op();
+    return -1;
+  }
+
+
+  if(writei(ip, 0, (uint64)target, 0, MAXPATH) != MAXPATH){
+    return -1;
+  }
+
+  iunlockput(ip);
+  end_op();
   return 0;
 }
